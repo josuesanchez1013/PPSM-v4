@@ -1,65 +1,31 @@
 <#
-    ppsm-collect.ps1 — PPSM data collection for Windows
+    ppsm-collect.ps1 - PPSM data collection for Windows
 
-    Runs the whole Windows side of PPSM collection and writes everything into
-    one results folder that PPSM Builder reads directly. Drag the folder onto
-    the tool when it finishes.
-
-    No modules required. Works on Windows PowerShell 3.0-5.1 and PowerShell 7.
-    Hosts without Get-NetTCPConnection (older builds, locked-down images) are
-    read with netstat -ano instead; the shell version and method used on each
-    host is recorded in the output. RSAT (ActiveDirectory) is used if present
-    and skipped if it is not. Nothing is uploaded and nothing leaves the machine.
+    Collects listening ports, connections and name sources from this machine
+    and any hosts given, into one results folder PPSM Builder reads directly.
+    Windows PowerShell 3.0-5.1 or PowerShell 7; no modules required. Hosts
+    without Get-NetTCPConnection are read with netstat -ano. Nothing leaves
+    the machine.
 
     USAGE
       .\ppsm-collect.ps1
       .\ppsm-collect.ps1 -Computers dc01,file01,sql01
-      .\ppsm-collect.ps1 -ComputerListFile .\hosts.txt -ThrottleLimit 64 -ProbeTimeout 3
       .\ppsm-collect.ps1 -ComputerListFile .\hosts.txt -OutputPath D:\ppsm
       .\ppsm-collect.ps1 -SkipAD -SkipDNS
       .\ppsm-collect.ps1 -NetworkDevices fw01:asa,core01:ios -NetworkUser admin
       .\ppsm-collect.ps1 -SelfTest
 
-    SELF-TEST
-      -SelfTest collects the local machine twice — once the normal way and
-      once forced through the netstat -ano fallback — and compares the two
-      listener lists. Run it once on a PowerShell 5.1 host (ideally one
-      where Get-NetTCPConnection is "not recognized") to confirm the
-      fallback gives the same ports before trusting a fleet run. It
-      writes nothing outside .\ppsm-selftest\.
+    Remote hosts are collected in parallel over WinRM (-ThrottleLimit, 32).
+    Each host's WinRM port is probed first; one that does not answer within
+    -ProbeTimeout seconds (5) is listed as unreachable and skipped. -UseSSL
+    and -WinRmPort select 5986.
 
-    NETWORK DEVICES (optional)
-      -NetworkDevices takes name[:type] entries. Type asa (default) pulls
-      "show conn all" plus the access-list and object-group config; type
-      ios pulls "show flow monitor <FlowMonitor> cache format csv". The
-      Windows OpenSSH client (ssh.exe, built in since Windows 10 1809 /
-      Server 2019) is used; you will be prompted for the password unless a
-      key is set up. For a whole fleet, ppsm.yml (Ansible) does the same.
+    -NetworkDevices takes name[:type]. asa (default) pulls "show conn all"
+    plus the access-list and object-group config; ios pulls the NetFlow
+    cache. Uses the Windows OpenSSH client.
 
-    Remote collection uses WinRM (Invoke-Command). If WinRM is not enabled,
-    the script still collects the local machine and tells you which hosts it
-    could not reach.
-
-    REACH AND SPEED
-      Hosts are collected IN PARALLEL (-ThrottleLimit, default 32 at once),
-      not one after another. Before WinRM is tried, every host's WinRM port
-      is probed at the same time and any host that does not answer within
-      -ProbeTimeout seconds (default 5) is skipped and listed as unreachable;
-      nothing waits on it. A host that answers the port but then stalls is
-      given -ConnectTimeout seconds to open the session and -HostTimeout
-      seconds to finish, then it is skipped too. The run never stops on one
-      host.
-
-    POWERSHELL VERSIONS
-      Runs on Windows PowerShell 3.0-5.1 and PowerShell 7 (the control
-      machine and the targets may differ). $PSVersionTable is checked on
-      every host and the version-specific choices are made there:
-        - ports: Get-NetTCPConnection / Get-NetUDPEndpoint when the NetTCPIP
-          module exists, otherwise netstat -ano parsed
-        - OS name: Get-CimInstance (3.0+), Get-WmiObject on anything older
-        - CSV encoding: 5.1 writes UTF-8 with a BOM on its own; 7 is told to
-          (-Encoding utf8BOM) so Excel opens both the same way
-      The shell version and method used are written per host.
+    -SelfTest collects the local machine both ways (NetTCPIP and netstat),
+    compares the listener lists and writes ppsm-selftest\SELFTEST.txt.
 #>
 
 #Requires -Version 3.0
@@ -584,7 +550,7 @@ Reached   : $reached of $($Computers.Count)
 $(if ($failed.Count) { "Unreachable: $($failed -join ', ')" })
 
 WHAT TO DO WITH THIS FOLDER
-  1. Open ppsm-builder.html in a browser.
+  1. Start PPSM Builder (python3 ppsm.py).
   2. Set the subnet-to-enclave map under Settings.
   3. Select every file in hosts\ and inventory\ and drop them on the Ingest box.
   4. Press Finish Register.
