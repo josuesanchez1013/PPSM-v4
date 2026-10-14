@@ -1,0 +1,6 @@
+Returned records:
+@ 3600 NS	addc20.range2.mil.
+  3600 SOA	addc20.range2.mil. hostmaster.range2.mil. 5 900 600 86400 3600
+analyst61 [Aging:3654321] 1200 A	172.22.14.61
+wsus11 3600 A	172.22.40.11
+Command completed successfully.

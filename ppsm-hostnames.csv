@@ -1,0 +1,5 @@
+Type,Application/Software Record Name,Protocol,Data Service,Port,Boundary,Direction,VPN / Encrypted Tunnel Traffic,VPN Tunnel Type,Source IP Address,Source FQDN,Connection Logical Source Point,Destination IP Address,Destination FQDN,Connection Logical Destination Point,Source Physical Location or Cloud Service Provider,Destination Physical Location or Cloud Service Provider,Purpose
+Local Service,WSUS,TCP,wsus,8530,18,Inbound,No,,analyst61,analyst61.range2.mil,Enclave,wsus11,wsus11.range2.mil,Enclave,Bldg 1,Bldg 1,Patching
+Local Service,Oracle,TCP,oracle,1521,18,Inbound,No,,,analyst62.range2.mil,Enclave,,oradb12.range2.mil,Enclave,Bldg 1,Bldg 1,DB
+Local Service,LDAP,TCP,ldaps,636,18,Inbound,No,,analyst61; analyst63,,Enclave,addc20.range2.mil,,Enclave,Bldg 1,Bldg 1,Auth
+Local Service,Syslog,UDP,syslog,514,18,Inbound,No,,FWD70,,Enclave,SYSLOG05.RANGE2.MIL.,,Enclave,Bldg 1,Bldg 1,Logs

@@ -1,0 +1,3 @@
+TCP outside 140.82.121.4:443 inside analyst61.range2.mil:51515, idle 0:00:05, bytes 2048, flags UIO
+TCP dmz wsus11:8530 inside analyst61:51616, idle 0:00:01, bytes 10240, flags UIO
+TCP dmz oradb12:1521 inside analyst62:51700, idle 0:00:02, bytes 999, flags UIO

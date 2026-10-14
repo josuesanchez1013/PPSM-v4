@@ -1,0 +1,350 @@
+---
+# ppsm.yml — PPSM data collection across a fleet
+#
+# Collects listening ports, active connections and name sources from every
+# host in the inventory and fetches them back into one results folder that
+# PPSM Builder reads directly.
+#
+#   ansible-playbook -i inventory.ini ppsm.yml
+#   ansible-playbook -i inventory.ini ppsm.yml -e results_dir=/tmp/ppsm
+#   ansible-playbook -i inventory.ini ppsm.yml --limit dmz
+#
+# Needs ansible-core 2.12+ plus these collections (bundled with the full
+# "ansible" package; on an air-gapped control node install them from a
+# downloaded tarball with ansible-galaxy collection install <file>.tar.gz):
+#   ansible.windows   (win_shell)        — Windows hosts
+#   ansible.netcommon (cli_command)      — Cisco firewalls / switches
+#   cisco.asa, cisco.ios                 — the network_os platforms used
+# Groups that are absent from the inventory are skipped with a warning.
+#
+# Windows hosts: works with Windows PowerShell 3.0-5.1 and PowerShell 7.
+# Where Get-NetTCPConnection is not available the host is read with
+# netstat -ano; the Collector column in each connections CSV says which.
+#
+# Example inventory.ini
+#   [linux]
+#   web01 ansible_host=10.20.30.20
+#   db01  ansible_host=10.20.30.15
+#
+#   [windows]
+#   dc01 ansible_host=10.20.30.30
+#
+#   [windows:vars]
+#   ansible_connection=winrm
+#   ansible_winrm_transport=kerberos
+#
+#   [cisco]
+#   fw01 ansible_host=10.20.1.1
+#   [cisco:vars]
+#   ansible_network_os=cisco.asa.asa
+#   ansible_connection=network_cli
+#
+# Nothing is uploaded anywhere. Everything is fetched to the control node.
+
+- name: Collect PPSM data from Linux hosts
+  hosts: linux
+  gather_facts: yes
+  become: yes                 # process names need root; without it a port
+                              # cannot be tied to a service
+  ignore_unreachable: yes
+  vars:
+    results_dir: "./ppsm-results"
+
+  tasks:
+    - name: Make sure a socket tool is present
+      ansible.builtin.command: which ss
+      register: ss_check
+      changed_when: false
+      failed_when: false
+
+    - name: Collect listeners and active connections
+      # One command covers both. ss reports the socket, the state and the
+      # owning process in a single pass.
+      ansible.builtin.shell: |
+        ss -tulpn 2>/dev/null || netstat -tulpn 2>/dev/null
+        echo
+        ss -tunap 2>/dev/null || netstat -tunap 2>/dev/null
+      register: sockets
+      changed_when: false
+      failed_when: false
+
+    - name: Write the socket list on the target
+      ansible.builtin.copy:
+        content: |
+          # ppsm-host: {{ inventory_hostname }}
+          # ppsm-ip: {{ ansible_default_ipv4.address | default('') }}
+          {{ sockets.stdout }}
+        dest: "/tmp/ppsm-{{ inventory_hostname }}-sockets.txt"
+        mode: '0600'
+      when: sockets.stdout is defined and sockets.stdout | length > 0
+
+    - name: Fetch the socket list
+      ansible.builtin.fetch:
+        src: "/tmp/ppsm-{{ inventory_hostname }}-sockets.txt"
+        dest: "{{ results_dir }}/hosts/{{ inventory_hostname }}-sockets.txt"
+        flat: yes
+      when: sockets.stdout is defined and sockets.stdout | length > 0
+
+    - name: Fetch /etc/hosts as a name source
+      ansible.builtin.fetch:
+        src: /etc/hosts
+        dest: "{{ results_dir }}/inventory/{{ inventory_hostname }}-hosts.txt"
+        flat: yes
+      failed_when: false
+
+    - name: Find DNS zone files, if this host serves DNS
+      ansible.builtin.find:
+        paths: [/var/named, /etc/bind, /var/lib/bind, /etc/named]
+        patterns: ["*.zone","*.db","db.*","*.rev","*.in-addr.arpa","*.hosts"]
+        excludes: ["db.local","db.127","db.0","db.255","db.empty","db.root","named.*"]
+      register: zonefiles
+      failed_when: false
+
+    - name: Fetch the DNS zone files
+      ansible.builtin.fetch:
+        src: "{{ item.path }}"
+        dest: "{{ results_dir }}/inventory/{{ inventory_hostname }}-zone-{{ item.path | basename }}"
+        flat: yes
+      loop: "{{ zonefiles.files | default([]) }}"
+      failed_when: false
+
+    - name: Tidy up the temporary file
+      ansible.builtin.file:
+        path: "/tmp/ppsm-{{ inventory_hostname }}-sockets.txt"
+        state: absent
+
+
+- name: Collect PPSM data from Windows hosts
+  hosts: windows
+  gather_facts: yes
+  ignore_unreachable: yes
+  vars:
+    results_dir: "./ppsm-results"
+
+  tasks:
+    - name: Collect listeners and active connections with the owning process
+      # Get-NetTCPConnection / Get-NetUDPEndpoint need the NetTCPIP module
+      # (Windows 8 / Server 2012+). Windows PowerShell 5.1 on an older build
+      # or a locked-down image does not have them, so the host is read with
+      # netstat -ano instead. The shell version and method are recorded in
+      # a Collector column so the results say how each host was read.
+      ansible.windows.win_shell: |
+        $procs = @{}
+        Get-Process | ForEach-Object { $procs[[int]$_.Id] = $_.ProcessName }
+        $psText = if ($PSVersionTable.PSVersion) { $PSVersionTable.PSVersion.ToString() } else { '2.0' }
+        $method = 'netstat'
+        $rows = New-Object System.Collections.ArrayList
+        $add = {
+          param($proto, $state, $sip, $sport, $dip, $dport, $procId)
+          $isListen = ($state -eq 'Listen')
+          $null = $rows.Add([pscustomobject]@{
+            'Source IP'        = if ($isListen) { '' } else { $sip }
+            'Source Port'      = if ($isListen) { '' } else { $sport }
+            'Destination IP'   = $dip
+            'Destination Port' = $dport
+            'Protocol'         = $proto
+            'Data Service / Application' = $procs[[int]$procId]
+            'Direction'        = if ($isListen) { 'Inbound' } else { 'Outbound' }
+            'Host'             = $env:COMPUTERNAME
+            'State'            = $state
+            'Process'          = $procs[[int]$procId]
+            'PID'              = $procId
+            'Collector'        = "PowerShell $psText / $method"
+          })
+        }
+        if (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue) {
+          try {
+            $tcp = @(Get-NetTCPConnection -ErrorAction Stop)
+            $method = 'Get-NetTCPConnection'
+            foreach ($c in $tcp) {
+              if ($c.State -ne 'Listen' -and $c.State -ne 'Established') { continue }
+              if ($c.State -eq 'Listen') { & $add 'TCP' 'Listen' '' '' $c.LocalAddress $c.LocalPort $c.OwningProcess }
+              else { & $add 'TCP' 'Established' $c.LocalAddress $c.LocalPort $c.RemoteAddress $c.RemotePort $c.OwningProcess }
+            }
+            foreach ($u in @(Get-NetUDPEndpoint -ErrorAction SilentlyContinue)) {
+              & $add 'UDP' 'Listen' '' '' $u.LocalAddress $u.LocalPort $u.OwningProcess
+            }
+          } catch { $rows.Clear(); $method = 'netstat' }
+        }
+        if ($method -eq 'netstat') {
+          $splitEp = { param($ep) $i = $ep.LastIndexOf(':'); if ($i -lt 0) { return @($ep,'') }
+                       return @($ep.Substring(0,$i).Trim('[',']'), $ep.Substring($i+1)) }
+          foreach ($line in ((& netstat -ano 2>$null) -split "`r?`n")) {
+            $m = [regex]::Match($line, '^\s*(TCP|UDP)\s+(\S+)\s+(\S+)\s+(?:([A-Z_]+)\s+)?(\d+)\s*$')
+            if (-not $m.Success) { continue }
+            $proto = $m.Groups[1].Value; $state = $m.Groups[4].Value; $procId = [int]$m.Groups[5].Value
+            $loc = & $splitEp $m.Groups[2].Value; $rem = & $splitEp $m.Groups[3].Value
+            if ($proto -eq 'TCP') {
+              if ($state -eq 'LISTENING') { & $add 'TCP' 'Listen' '' '' $loc[0] $loc[1] $procId }
+              elseif ($state -eq 'ESTABLISHED') { & $add 'TCP' 'Established' $loc[0] $loc[1] $rem[0] $rem[1] $procId }
+            } else { & $add 'UDP' 'Listen' '' '' $loc[0] $loc[1] $procId }
+          }
+        }
+        # face each established connection toward the service: a client of a
+        # local listener is reported as local:443 -> remote:49700 and is
+        # really Inbound to our listener
+        $listening = @{}
+        foreach ($r in $rows) { if ($r.State -eq 'Listen') { $listening[$r.Protocol + '/' + $r.'Destination Port'] = $true } }
+        foreach ($r in $rows) {
+          if ($r.State -eq 'Established' -and $listening[$r.Protocol + '/' + $r.'Source Port']) {
+            $sip = $r.'Source IP'; $spt = $r.'Source Port'
+            $r.'Source IP' = $r.'Destination IP'; $r.'Source Port' = $r.'Destination Port'
+            $r.'Destination IP' = $sip; $r.'Destination Port' = $spt
+            $r.Direction = 'Inbound'
+          }
+        }
+        # stderr, not the warning stream: powershell.exe prints warnings on
+        # stdout and that would put a stray line above the CSV header
+        [Console]::Error.WriteLine(("ppsm: {0} read with PowerShell {1} via {2}, {3} rows" -f $env:COMPUTERNAME, $psText, $method, $rows.Count))
+        $rows | ConvertTo-Csv -NoTypeInformation
+      register: wincon
+      changed_when: false
+      failed_when: false
+
+    - name: Save the Windows connection list
+      ansible.builtin.copy:
+        content: "{{ wincon.stdout }}"
+        dest: "{{ results_dir }}/hosts/{{ inventory_hostname }}-connections.csv"
+      delegate_to: localhost
+      when: wincon.stdout is defined and wincon.stdout | length > 0
+
+    - name: Export computer names from Active Directory (first reachable DC only)
+      ansible.windows.win_shell: |
+        Import-Module ActiveDirectory -ErrorAction Stop
+        Get-ADComputer -Filter * -Properties DNSHostName,IPv4Address,OperatingSystem,Description |
+          Where-Object { $_.IPv4Address } |
+          Select-Object Name,DNSHostName,IPv4Address,OperatingSystem,Description |
+          ConvertTo-Csv -NoTypeInformation
+      register: adout
+      changed_when: false
+      failed_when: false
+      run_once: yes
+
+    - name: Export DNS zones, forward and reverse (DNS servers only)
+      # a reverse zone is the authoritative answer to "what is this address
+      # called"; RecordData is expanded because it does not survive Export-Csv
+      ansible.windows.win_shell: |
+        try { Import-Module DnsServer -ErrorAction Stop } catch { exit 0 }
+        $zones = Get-DnsServerZone | Where-Object { -not $_.IsAutoCreated -and $_.ZoneName -ne 'TrustAnchors' }
+        # a foreach STATEMENT cannot feed a pipeline; collect it into a
+        # variable first (this used to be a parse error, so no DNS export
+        # ever came back from Ansible)
+        $recs = foreach ($z in $zones) {
+          Get-DnsServerResourceRecord -ZoneName $z.ZoneName -ErrorAction SilentlyContinue |
+            Where-Object { $_.RecordType -in 'A','PTR','CNAME' } |
+            Select-Object HostName, RecordType, @{n='ZoneName';e={$z.ZoneName}},
+              @{n='IPv4Address';e={$_.RecordData.IPv4Address.IPAddressToString}},
+              @{n='PtrDomainName';e={$_.RecordData.PtrDomainName}},
+              @{n='HostNameAlias';e={$_.RecordData.HostNameAlias}}
+        }
+        $recs | ConvertTo-Csv -NoTypeInformation
+      register: dnsout
+      changed_when: false
+      failed_when: false
+
+    - name: Save the DNS export
+      ansible.builtin.copy:
+        content: "{{ dnsout.stdout }}"
+        dest: "{{ results_dir }}/inventory/{{ inventory_hostname }}-dns-records.csv"
+      delegate_to: localhost
+      when: dnsout.stdout is defined and dnsout.stdout is search('HostName')
+
+    - name: Save the AD export
+      ansible.builtin.copy:
+        content: "{{ adout.stdout }}"
+        dest: "{{ results_dir }}/inventory/ad-computers.csv"
+      delegate_to: localhost
+      run_once: yes
+      when: adout.stdout is defined and adout.stdout | length > 0
+
+
+- name: Collect the firewall connection table
+  hosts: cisco
+  gather_facts: no
+  ignore_unreachable: yes
+  vars:
+    results_dir: "./ppsm-results"
+
+  tasks:
+    - name: Dump the connection table
+      # This is the evidence that a flow actually crosses the boundary, and
+      # the interface names on each line drive the Boundary column.
+      ansible.netcommon.cli_command:
+        command: show conn all
+      register: conns
+      failed_when: false
+
+    - name: Save the connection table
+      ansible.builtin.copy:
+        content: "{{ conns.stdout }}"
+        dest: "{{ results_dir }}/network/{{ inventory_hostname }}-showconn.txt"
+      delegate_to: localhost
+      when: conns.stdout is defined and conns.stdout | length > 0
+
+    - name: Dump the ruleset
+      # What the firewall permits, as opposed to what it happened to carry.
+      # The object-groups matter: without them a rule written against a group
+      # cannot be expanded into the hosts and ports it covers.
+      ansible.netcommon.cli_command:
+        command: "{{ item }}"
+      register: aclout
+      loop:
+        - show running-config access-list
+        - show running-config object-group
+      failed_when: false
+
+    - name: Save the ruleset
+      ansible.builtin.copy:
+        content: "{{ aclout.results | map(attribute='stdout') | select('defined') | join('\n') }}"
+        dest: "{{ results_dir }}/network/{{ inventory_hostname }}-acl.txt"
+      delegate_to: localhost
+      when: aclout is defined
+
+
+- name: Collect NetFlow from switches
+  hosts: switches
+  gather_facts: no
+  ignore_unreachable: yes
+  vars:
+    results_dir: "./ppsm-results"
+    flow_monitor: "FLOW-IN-IQCORE"
+
+  tasks:
+    - name: Dump the NetFlow cache
+      ansible.netcommon.cli_command:
+        command: "show flow monitor {{ flow_monitor }} cache format csv"
+      register: flows
+      failed_when: false
+
+    - name: Save the NetFlow cache
+      ansible.builtin.copy:
+        content: "{{ flows.stdout }}"
+        dest: "{{ results_dir }}/network/{{ inventory_hostname }}-netflow.csv"
+      delegate_to: localhost
+      when: flows.stdout is defined and flows.stdout | length > 0
+
+
+- name: Summarise
+  hosts: localhost
+  gather_facts: no
+  vars:
+    results_dir: "./ppsm-results"
+  tasks:
+    - name: Write the read-me
+      ansible.builtin.copy:
+        dest: "{{ results_dir }}/READ-ME.txt"
+        content: |
+          PPSM collection results
+          =======================
+          Collected: {{ '%Y-%m-%dT%H:%M:%S' | strftime }}
+
+          WHAT TO DO WITH THIS FOLDER
+            1. Open ppsm-builder.html in a browser.
+            2. Set the subnet-to-enclave map under Settings.
+            3. Select every file in hosts/, inventory/ and network/ and drop
+               them on the Ingest box.
+            4. Press Finish Register.
+
+          Files that came back are under hosts/, inventory/ and network/.
+          Anything missing means that group was unreachable or the command
+          was not permitted; the playbook run log says which.

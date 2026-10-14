@@ -1,0 +1,5 @@
+Source,Destination,Protocol,Port,Service
+analyst61.range2.mil,wsus11.range2.mil,TCP,8530,wsus
+mystery01,oradb12,TCP,1521,oracle
+172.22.14.62 (analyst99),oradb12,TCP,1521,oracle
+patch.range2.mil,update.microsoft.com,TCP,443,https

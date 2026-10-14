@@ -1,0 +1,14 @@
+Name,Type,Data,Timestamp
+analyst61,Host (A),172.22.14.61,9/1/2026 8:00:00 AM
+analyst62,Host (A),172.22.14.62,9/1/2026 8:00:00 AM
+analyst63,Host (A),172.22.14.63,static
+fwd70,Host (A),172.22.14.70,static
+kiosk80,Host (A),172.22.14.80,static
+wsus11,Host (A),172.22.40.11,static
+oradb12,Host (A),172.22.40.12,static
+addc20,Host (A),172.22.40.20,static
+syslog05,Host (A),172.22.60.5,static
+vendor44,Host (A),172.22.40.44,static
+patch,Alias (CNAME),wsus11.range2.mil.,static
+(same as parent folder),Start of Authority (SOA),"[5], addc20.range2.mil., hostmaster.range2.mil.",static
+(same as parent folder),Name Server (NS),addc20.range2.mil.,static
