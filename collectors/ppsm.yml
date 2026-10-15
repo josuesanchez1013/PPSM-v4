@@ -339,7 +339,7 @@
           Collected: {{ '%Y-%m-%dT%H:%M:%S' | strftime }}
 
           WHAT TO DO WITH THIS FOLDER
-            1. Open ppsm-builder.html in a browser.
+            1. Start PPSM Builder (python3 ppsm.py).
             2. Set the subnet-to-enclave map under Settings.
             3. Select every file in hosts/, inventory/ and network/ and drop
                them on the Ingest box.

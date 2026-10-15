@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PPSM Builder</title>
+<link rel="stylesheet" href="/static/css/ppsm.css">
+<script>window.__errors=[];addEventListener("error",e=>{__errors.push(e.message+" @ "+e.filename+":"+e.lineno);if(document.body)document.body.dataset.errors=__errors.join("\n");});</script>
+</head>
+<body>
+<div class="classbar u" id="classbar" title="Click to cycle the document classification">UNCLASSIFIED</div>
+
+<header class="top">
+  <div class="brand">
+    <a href="/" data-page="setup"><h1>PPSM <b>Builder</b></h1></a>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="/" data-page="setup">Setup</a>
+    <a href="/register" data-page="register">Register <span class="navcount" id="navCount"></span></a>
+    <a href="/review" data-page="review">Review</a>
+    <a href="/endpoints" data-page="endpoints">Endpoints</a>
+    <a href="/diagram" data-page="diagram">Diagram</a>
+    <a href="/compare" data-page="compare">Compare</a>
+    <a href="/export" data-page="export">Export</a>
+    <a href="/settings" data-page="settings">Settings</a>
+    <a href="/guide" data-page="guide">Guide</a>
+  </nav>
+  <div class="topright">
+    <span class="savestate" id="saveState" title="Work is saved to the local data folder as you go"></span>
+    <button class="btn" id="stBtn">Self-Test</button>
+  </div>
+</header>
+
+<noscript><div class="wrap"><p class="empty">PPSM Builder needs JavaScript. Open it in a current Chrome, Edge or Firefox.</p></div></noscript>
+
+<div class="modal-bg" id="errModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Import error" style="max-width:600px">
+    <div class="modal-h">
+      <h2 style="color:var(--danger)">Import problem</h2>
+      <button class="modal-x" id="errClose" title="Close">×</button>
+    </div>
+    <div class="modal-b" id="errBody"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="stModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Self-test results" style="max-width:620px">
+    <div class="modal-h">
+      <h2>Self-Test</h2>
+      <button class="modal-x" id="stClose" title="Close">×</button>
+    </div>
+    <div class="modal-b" id="stBody"></div>
+  </div>
+</div>
+
+<datalist id="colllist"></datalist>
+<datalist id="hostlist"></datalist>
+
+<div class="wrap">
+
+<!-- ================= Setup ================= -->
+<main class="page" data-page="setup">
+  <section class="card">
+    <div class="card-h"><h2>System</h2><span class="hint">applies to every exported row</span></div>
+    <div class="card-b">
+      <div class="meta">
+        <div class="field wide"><label class="lbl">System / Enclave Name</label>
+          <input class="t" id="m_system" placeholder="e.g. ACME-SAP-ENCLAVE-A"></div>
+        <div class="field"><label class="lbl">Network Environment</label>
+          <select class="t" id="m_env">
+            <option value="">— select —</option>
+            <option>Unclassified</option>
+            <option>Classified</option>
+            <option>Other</option>
+          </select>
+          <input class="t" id="m_env_other" placeholder="specify environment" style="display:none;margin-top:6px"></div>
+        <div class="field"><label class="lbl">System Classification</label>
+          <select class="t" id="m_class" title="Classification of the enclave (metadata only)"></select></div>
+        <div class="field"><label class="lbl">Document Classification</label>
+          <select class="t" id="m_docclass" title="Classification of this PPSM document; sets the banner"></select></div>
+        <div class="field"><label class="lbl">Version</label>
+          <input class="t" id="m_version" placeholder="e.g. 1.0"></div>
+        <div class="field wide"><label class="lbl">Description</label>
+          <input class="t" id="m_desc" placeholder="short description of the system"></div>
+        <div class="field"><label class="lbl">POC</label>
+          <input class="t" id="m_poc" placeholder="ISSM / ISSO name"></div>
+        <div class="field"><label class="lbl">Date</label>
+          <input class="t" id="m_date" type="date"></div>
+      </div>
+      <details class="emass-meta"><summary>eMASS template header</summary>
+        <div class="grid3">
+          <div class="f"><label>Exported By</label><input class="t" id="m_exportedby"></div>
+          <div class="f"><label>Office / Org</label><input class="t" id="m_office" placeholder="e.g. 123 CS/SCOO"></div>
+          <div class="f"><label>Information System Owner</label><input class="t" id="m_owner"></div>
+          <div class="f"><label>System ID</label><input class="t" id="m_sysid" placeholder="eMASS system ID"></div>
+          <div class="f"><label>DITPR ID</label><input class="t" id="m_ditpr"></div>
+          <div class="f"><label>POC Name</label><input class="t" id="m_pocname"></div>
+          <div class="f"><label>POC Phone</label><input class="t" id="m_pocphone"></div>
+          <div class="f"><label>POC E-Mail</label><input class="t" id="m_pocemail"></div>
+          <div class="f"><label>Date Reviewed</label><input class="t" id="m_reviewdate" type="date"></div>
+          <div class="f"><label>Reviewed By</label><input class="t" id="m_reviewedby"></div>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Ingest</h2><span class="hint">files are read on this machine and never leave it</span></div>
+    <div class="card-b">
+      <div class="drop" id="drop">
+        <div class="big">Drop the collection folder here, or click to browse</div>
+        <div class="small">Any mix of files. Each one is identified from its contents. See the <a href="/guide" data-page="guide">Guide</a> for what is read.</div>
+        <input type="file" id="file" multiple hidden>
+      </div>
+      <div class="opts">
+        <label class="opt"><input type="checkbox" id="conns" checked>
+          <span>Include active connections <em>(host-to-host flows, not just listeners)</em></span></label>
+        <label class="opt"><input type="checkbox" id="airgap" checked>
+          <span>Air-gapped <em>(anything the addresses cannot place is Internal)</em></span></label>
+        <label class="opt optfield"><span>Enclave for this import</span>
+          <input class="t mini" id="impEnclave" placeholder="e.g. ENCLAVE-A" list="enclist"></label>
+        <label class="opt optfield"><span>Listener source port range</span>
+          <input class="t mini" id="ephem" value="1024-65535"></label>
+        <label class="opt optfield"><span>Collector host</span>
+          <input class="t mini" id="impCollector" placeholder="e.g. CSS-WKS-01" list="colllist"
+            title="The machine this data was gathered from; stamped on every row of this import"></label>
+      </div>
+      <div class="loglist" id="loglist"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= Register ================= -->
+<main class="page" data-page="register" hidden>
+  <section class="card">
+    <div class="card-h"><h2>Register</h2><span class="hint">edit any cell</span></div>
+    <div class="card-b">
+      <div class="toolbar">
+        <button class="btn" id="addRow">+ Add Row</button>
+        <button class="btn primary" id="finishBtn" title="Resolve names, fill in what can be derived, merge duplicates and run the checks">Finish Register</button>
+        <button class="btn" id="dedupe">Dedupe</button>
+        <button class="btn" id="consolidate" title="Join ports for the same source/destination, and sources for the same service">Consolidate</button>
+        <button class="btn danger ghost" id="clearAll">Clear All</button>
+        <span class="spacer"></span>
+        <span class="count" id="count">0 entries</span>
+      </div>
+
+      <div class="filterbar">
+        <input class="t" id="fSearch" placeholder="Search" style="flex:2;min-width:170px">
+        <select class="t" id="fField" style="flex:1" title="Limit the search to one field"><option value="">in any field</option></select>
+        <select class="t" id="fEnclave" style="flex:1"><option value="">All enclaves</option></select>
+        <select class="t" id="fBoundary" style="flex:1"><option value="">All boundaries</option></select>
+        <select class="t" id="fOrigin" style="flex:1"><option value="">All sources</option></select>
+        <select class="t" id="fCollector" style="flex:1"><option value="">All collectors</option></select>
+        <button class="btn ghost" id="fClear">Clear</button>
+      </div>
+
+      <div class="filterbar">
+        <input class="t" id="fExclude" style="flex:3;min-width:240px"
+          placeholder="Hide addresses: 10.20.99.99, 172.22.60.0/24, scanner*, backup01"
+          title="Addresses, networks, hostnames or wildcards to leave out. Matches either end of a flow.">
+        <span class="count" id="exCount"></span>
+        <button class="btn ghost" id="fExRemove" title="Delete the hidden rows from the register">Remove hidden</button>
+      </div>
+
+      <div class="bulkbar">
+        <span class="bulk-lbl">Bulk-apply to <b id="bulkN">0</b> <span id="bulkTarget">filtered</span> rows</span>
+        <select class="t" id="bulkField">
+          <option value="enclave">Enclave</option>
+          <option value="boundary">Boundary</option>
+          <option value="isaRef">Interconnection / Agreement Ref</option>
+          <option value="classification">Classification</option>
+          <option value="assurance">Assurance Category</option>
+          <option value="status">Status</option>
+          <option value="direction">Direction</option>
+          <option value="cal">CAL Listed?</option>
+          <option value="srcHost">Source Hostname</option>
+          <option value="dstHost">Destination Hostname</option>
+          <option value="srcPort">Source Port</option>
+          <option value="collector">Collector / Source Host</option>
+          <option value="srcZone">Source Zone</option>
+          <option value="dstZone">Destination Zone</option>
+          <option value="notes">Notes</option>
+          <option value="justification">Mission Justification</option>
+          <option value="srcLoc">Source Physical Location</option>
+          <option value="dstLoc">Destination Physical Location</option>
+          <option value="vpn">VPN / Encrypted Tunnel Traffic</option>
+          <option value="vpnType">VPN Tunnel Type</option>
+        </select>
+        <span id="bulkValWrap" style="flex:1;min-width:160px;display:flex"></span>
+        <button class="btn primary" id="bulkApply">Apply</button>
+        <button class="btn ghost" id="bulkClearSel" title="Deselect all rows">Clear selection</button>
+        <span class="bulkmsg" id="bulkMsg"></span>
+      </div>
+
+      <div class="tablewrap">
+        <table id="tbl">
+          <thead><tr>
+            <th class="stick1" style="width:30px"><input type="checkbox" id="selAll" title="Select / clear all filtered rows"></th>
+            <th class="stick2">#</th>
+            <th>Enclave</th>
+            <th>Source IP</th>
+            <th>Source Hostname</th>
+            <th>Dest IP</th>
+            <th>Dest Hostname</th>
+            <th>Protocol</th>
+            <th>Src Port</th>
+            <th>Dst Port</th>
+            <th>Data Service / App</th>
+            <th>Service / Banner</th>
+            <th>Direction</th>
+            <th>Boundary Crossed</th>
+            <th>Interconnection / Agreement Ref</th>
+            <th>Data Description</th>
+            <th>Classification</th>
+            <th>Mission Justification</th>
+            <th>Assurance Cat.</th>
+            <th>Status</th>
+            <th>CAL?</th>
+            <th>Collector / Source Host</th>
+            <th>Src Zone</th>
+            <th>Dst Zone</th>
+            <th>Pkts</th>
+            <th>Bytes</th>
+            <th>Notes</th>
+            <th>Origin</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="empty">No entries yet. Drop a collection folder on the <a href="/" data-page="setup">Setup</a> page, or add a row.</div>
+      <div class="pager" id="pager">
+        <span class="pginfo" id="pgInfo"></span>
+        <span class="spacer"></span>
+        <label class="pgsz">Rows/page
+          <select class="t" id="pgSize"><option>50</option><option selected>100</option><option>250</option><option>500</option><option value="0">All</option></select>
+        </label>
+        <button class="btn ghost" id="pgFirst">«</button>
+        <button class="btn ghost" id="pgPrev">‹ Prev</button>
+        <span class="pgnum" id="pgNum">1 / 1</span>
+        <button class="btn ghost" id="pgNext">Next ›</button>
+        <button class="btn ghost" id="pgLast">»</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= Review ================= -->
+<main class="page" data-page="review" hidden>
+  <section class="card" id="cardEnrich">
+    <div class="card-h"><h2>Fill In</h2><span class="hint">derives empty cells from the data</span></div>
+    <div class="card-b">
+      <div class="opts" id="enrichOpts" style="margin-bottom:12px"></div>
+      <div class="toolbar">
+        <select class="t" id="enrichScope" style="max-width:190px">
+          <option value="all">All rows</option>
+          <option value="filtered">Filtered rows only</option>
+        </select>
+        <label class="opt"><input type="checkbox" id="enrichOverwrite">
+          <span>Overwrite cells that already have a value</span></label>
+        <button class="btn primary" id="enrichRun">Fill In</button>
+      </div>
+      <p class="hint" style="margin-top:10px">Mission Justification is off by default. When ticked it writes a draft purpose marked [DRAFT], which the checks keep flagging until it is edited.</p>
+    </div>
+  </section>
+
+  <section class="card" id="cardChecks">
+    <div class="card-h"><h2>Review Checks</h2><span class="hint">what submissions get sent back for</span></div>
+    <div class="card-b">
+      <div id="chkSummary" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px"></div>
+      <div class="toolbar" style="margin-bottom:12px">
+        <select class="t" id="chkScope" style="max-width:190px">
+          <option value="all">All rows</option>
+          <option value="filtered">Filtered rows only</option>
+        </select>
+        <button class="btn primary" id="chkRun">Run Checks</button>
+        <button class="btn ghost" id="chkExport">Export Findings</button>
+      </div>
+      <div id="chkBody"><div class="dg-empty">No register entries yet.</div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Rule Coverage</h2><span class="hint">observed flows against the imported ruleset</span></div>
+    <div class="card-b">
+      <div id="covSummary" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
+      <div class="toolbar" style="margin-bottom:10px">
+        <button class="btn primary" id="covRun">Run Coverage</button>
+        <button class="btn ghost" id="covExport" title="Every flow with the rules that permit it, and every permit rule with the flows that used it">Coverage Report</button>
+      </div>
+      <div id="covBody"><div class="dg-empty">Needs a ruleset (ACL or policy export) and observed traffic in the register.</div></div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= Endpoints ================= -->
+<main class="page" data-page="endpoints" hidden>
+  <section class="card" id="cardEndpoints">
+    <div class="card-h"><h2>Endpoints</h2><span class="hint">every system in the register</span></div>
+    <div class="card-b">
+      <div id="epStats"></div>
+      <div class="toolbar" style="margin-bottom:12px">
+        <select class="t" id="epScope" style="max-width:190px">
+          <option value="all">All rows</option>
+          <option value="filtered">Filtered rows only</option>
+        </select>
+        <label class="opt"><input type="checkbox" id="epUnnamed"><span>Only unidentified</span></label>
+        <button class="btn" id="epRefresh">Refresh</button>
+        <button class="btn primary" id="epResolve" title="Fill in hostnames from the host inventory">Resolve Hostnames</button>
+        <span class="spacer"></span>
+        <button class="btn ghost" id="epImport" title="DNS zones or exports, hosts files, DHCP leases, AD/CMDB exports, or a filled-in work list">Load Host Inventory</button>
+        <input type="file" id="epFile" accept=".csv,.tsv,.txt,.log,.zone,.db,.rev,.arpa,.dns,.leases,.hosts,.xlsx,.xml,.nessus,.json" multiple hidden>
+        <button class="btn ghost" id="epExport">Export Endpoints</button>
+        <button class="btn ghost" id="epExportUn">Unidentified Work List</button>
+        <button class="btn ghost" id="epExportMap">Host Inventory</button>
+      </div>
+      <div id="epBody"><div class="dg-empty">No endpoints yet.</div></div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= Diagram ================= -->
+<main class="page" data-page="diagram" hidden>
+  <section class="card" id="cardDiagram">
+    <div class="card-h"><h2>Boundary Diagram</h2><span class="hint">generated from the register</span></div>
+    <div class="card-b">
+      <div class="dg-ctl">
+        <div class="field"><label class="lbl">Diagram type</label>
+          <select class="t" id="dgMode">
+            <option value="environment">Environment (topology from your data)</option>
+            <option value="flow">Flow map (source to boundary)</option>
+            <option value="reference">DoD 16-boundary reference</option>
+          </select></div>
+        <div class="field"><label class="lbl">Group flows by</label>
+          <select class="t" id="dgGroup">
+            <option value="boundary">Enclave to Boundary</option>
+            <option value="zone">Source zone to Dest zone</option>
+            <option value="collector">Collector to Boundary</option>
+          </select></div>
+        <div class="field"><label class="lbl">Data scope</label>
+          <select class="t" id="dgScope">
+            <option value="all">All rows</option>
+            <option value="filtered">Filtered rows only</option>
+          </select></div>
+        <div class="field"><label class="lbl">Theme</label>
+          <select class="t" id="dgTheme">
+            <option value="dark">Dark</option><option value="light">Light</option>
+            <option value="print">Print (B/W)</option>
+          </select></div>
+        <div class="field"><label class="lbl">Max edges</label>
+          <input class="t" id="dgMaxEdges" type="number" min="4" max="80" value="24"></div>
+        <div class="field"><label class="lbl">Ports shown</label>
+          <input class="t" id="dgPortCount" type="number" min="0" max="12" value="4"></div>
+        <div class="field"><label class="lbl">Width (px)</label>
+          <input class="t" id="dgWidth" type="number" min="700" max="2400" step="50" value="1100"></div>
+        <div class="field"><label class="lbl">Row height</label>
+          <input class="t" id="dgRowH" type="number" min="44" max="120" value="62"></div>
+        <div class="field"><label class="lbl">PNG scale</label>
+          <select class="t" id="dgScale"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
+        <div class="field" style="flex:2;min-width:230px"><label class="lbl">Title</label>
+          <input class="t" id="dgTitle" placeholder="defaults to the system name"></div>
+      </div>
+      <div class="opts" style="margin-bottom:12px">
+        <label class="opt"><input type="checkbox" id="dgShowPorts" checked><span>Top ports on boundary nodes</span></label>
+        <label class="opt"><input type="checkbox" id="dgShowCounts" checked><span>Flow counts on edges</span></label>
+      </div>
+      <div class="toolbar" style="margin-bottom:12px">
+        <button class="btn primary" id="dgGen">Generate</button>
+        <button class="btn" id="dgSvg">Export SVG</button>
+        <button class="btn" id="dgPng">Export PNG</button>
+        <button class="btn" id="dgPrint">Print / PDF</button>
+      </div>
+      <div id="dgCanvas"><div class="dg-empty">No register entries yet.</div></div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= Compare ================= -->
+<main class="page" data-page="compare" hidden>
+  <section class="card" id="cardDiff">
+    <div class="card-h"><h2>Compare with Previous Register</h2><span class="hint">last submission beside this run</span></div>
+    <div class="card-b">
+      <div class="toolbar" style="margin-bottom:10px">
+        <button class="btn primary" id="diffLoad">Load Previous Register</button>
+        <input type="file" id="diffFile" accept=".xlsx,.xlsm,.csv,.json,.txt" multiple hidden>
+        <button class="btn ghost" id="diffExport" title="Added / removed / changed as CSV">Diff Report</button>
+        <button class="btn ghost" id="diffApply" title="Rows the previous register carried become Registered; the rest become New">Mark Registered / New</button>
+      </div>
+      <div id="diffSummary" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
+      <div id="diffBody"><div class="dg-empty">Load an allow.xlsx, eMASS export or saved session to see what is new, gone and changed.</div></div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= Export ================= -->
+<main class="page" data-page="export" hidden>
+  <section class="card">
+    <div class="card-h"><h2>eMASS</h2><span class="hint">the PPSM Boundary Information Import Template</span></div>
+    <div class="card-b">
+      <div class="toolbar">
+        <button class="btn primary" id="expEmassXlsx" title="21 columns plus the Glossary and Instructions sheets">eMASS Import (allow.xlsx)</button>
+        <button class="btn ghost" id="expEmassCsv" title="The 21 columns as CSV">eMASS CSV</button>
+      </div>
+    </div>
+  </section>
+  <section class="card">
+    <div class="card-h"><h2>Working Copies</h2><span class="hint">for your own records</span></div>
+    <div class="card-b">
+      <div class="toolbar">
+        <button class="btn" id="expXlsx">Excel (.xlsx)</button>
+        <button class="btn" id="expCsv">CSV</button>
+        <button class="btn" id="expReport">Printable Report</button>
+      </div>
+    </div>
+  </section>
+  <section class="card">
+    <div class="card-h"><h2>Session</h2><span class="hint">work is autosaved to the data folder; these make copies</span></div>
+    <div class="card-b">
+      <div class="toolbar">
+        <button class="btn" id="saveJson">Save Session (.json)</button>
+        <button class="btn" id="loadJson">Load Session</button>
+        <input type="file" id="jsonFile" accept=".json" hidden>
+        <button class="btn ghost" id="expProfile" title="Settings only, no data">Save Profile</button>
+        <button class="btn ghost" id="impProfileBtn">Load Profile</button>
+        <input type="file" id="profileFile" accept=".json" hidden>
+        <span class="spacer"></span>
+        <button class="btn danger ghost" id="newSession" title="Discard everything and start empty">New Session</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= Settings ================= -->
+<main class="page" data-page="settings" hidden>
+  <section class="card" id="cfgModal">
+    <div class="card-h"><h2>Settings</h2><span class="hint">saved with the session</span></div>
+    <div class="card-b">
+      <div class="cfg-sec">Import</div>
+      <div class="opts">
+        <label class="opt"><input type="checkbox" id="cfg_autofinish" checked>
+          <span>Finish the register after each import (resolve names, fill in, dedupe, run checks)</span></label>
+      </div>
+      <div class="cfg-grid" style="margin-top:12px">
+        <div class="field"><label class="lbl">Default enclave</label>
+          <input class="t" id="cfg_defEnclave" placeholder="e.g. ENCLAVE-A"></div>
+        <div class="field"><label class="lbl">Default collector host</label>
+          <input class="t" id="cfg_defCollector" placeholder="e.g. CSS-WKS-01"></div>
+      </div>
+
+      <div class="cfg-sec">Flow orientation</div>
+      <div class="cfg-grid">
+        <div class="field"><label class="lbl">Well-known port ceiling</label>
+          <input class="t" id="cfg_wellKnown" type="number" min="1" max="65535" value="1024"></div>
+        <div class="field"><label class="lbl">Ephemeral source range</label>
+          <input class="t" id="cfg_ephem" value="1024-65535"></div>
+      </div>
+      <div class="cfg-note">When a capture does not show which side opened the connection, the end with the lower port is the server. Windows ephemeral is 49152-65535, Linux 32768-60999.</div>
+      <div class="opts">
+        <label class="opt"><input type="checkbox" id="cfg_exephsrc" checked>
+          <span>Clear ephemeral source ports</span></label>
+        <label class="opt"><input type="checkbox" id="cfg_exephdst">
+          <span>Drop observed rows whose destination port is ephemeral (registered and rule rows are kept)</span></label>
+      </div>
+
+      <div class="cfg-sec">Packet capture</div>
+      <div class="cfg-grid">
+        <div class="field"><label class="lbl">Minimum packets per flow</label>
+          <input class="t" id="cfg_pcapMin" type="number" min="1" max="10000" value="1"></div>
+        <div class="field"><label class="lbl">Max packets to read</label>
+          <input class="t" id="cfg_pcapMax" type="number" min="1000" step="1000" value="500000"></div>
+      </div>
+      <div class="opts" style="margin-top:8px">
+        <label class="opt"><input type="checkbox" id="cfg_pcapIcmp" checked><span>Include ICMP</span></label>
+        <label class="opt"><input type="checkbox" id="cfg_pcapOther" checked><span>Include non-TCP/UDP protocols (GRE, ESP, OSPF)</span></label>
+        <label class="opt"><input type="checkbox" id="cfg_pcapMcast"><span>Drop broadcast / multicast destinations</span></label>
+      </div>
+
+      <div class="cfg-sec">eMASS template</div>
+      <div class="opts">
+        <label class="opt optfield"><span>DNS domain, to complete short names</span>
+          <input class="t" id="cfg_dnsdom" placeholder="range2.mil"></label>
+        <label class="opt optfield"><span>Physical location of this enclave</span>
+          <input class="t" id="cfg_site" placeholder="Bldg 1234, Peterson SFB, CO"></label>
+        <label class="opt optfield"><span>Label for anything outside the enclave</span>
+          <input class="t" id="cfg_csp" placeholder="External (non-DoD)"></label>
+        <label class="opt optfield"><span>Source Physical Location (our addresses)</span>
+          <input class="t" id="cfg_srcloc" placeholder="defaults to the enclave location"></label>
+        <label class="opt optfield"><span>Destination Physical Location (our addresses)</span>
+          <input class="t" id="cfg_dstloc" placeholder="defaults to the enclave location"></label>
+        <label class="opt optfield"><span>VPN / Encrypted Tunnel Traffic on export</span>
+          <select class="t" id="cfg_expvpn">
+            <option value="">Per row, derived from the boundary</option>
+            <option value="Yes">Yes on every row</option>
+            <option value="No">No on every row</option>
+          </select></label>
+        <label class="opt"><input type="checkbox" id="cfg_expvpnow">
+          <span>Overwrite rows that already have a VPN value</span></label>
+        <label class="opt optfield"><span>VPN Tunnel Type on export</span>
+          <select class="t" id="cfg_expvpntype"><option value="">Per row, as entered</option></select></label>
+        <label class="opt"><input type="checkbox" id="cfg_expvpntypeow">
+          <span>Overwrite rows that already have a tunnel type</span></label>
+        <label class="opt optfield"><span>VPN Tunnel Type when there is no tunnel</span>
+          <input class="t" id="cfg_vpnnone" placeholder="leave blank, or N/A"></label>
+        <label class="opt"><input type="checkbox" id="cfg_oneperport" checked>
+          <span>One row per port, with every service, application, source and destination joined</span></label>
+        <label class="opt"><input type="checkbox" id="cfg_iponly" checked>
+          <span>IP addresses only in Source / Destination</span></label>
+        <label class="opt"><input type="checkbox" id="cfg_sortport" checked>
+          <span>Order rows by port</span></label>
+        <label class="opt"><input type="checkbox" id="cfg_exppurpose" checked>
+          <span>Generate a Purpose where Mission Justification is blank</span></label>
+      </div>
+      <div class="cfg-note">Per-row values set in the register win unless an overwrite box is ticked.</div>
+
+      <div class="cfg-sec">Exports</div>
+      <div class="opts">
+        <label class="opt"><input type="checkbox" id="cfg_consol" checked>
+          <span>Consolidate ports: one row per source/destination</span></label>
+        <label class="opt"><input type="checkbox" id="cfg_consolsrc" checked>
+          <span>Consolidate sources: one row per service</span></label>
+        <label class="opt"><input type="checkbox" id="cfg_ipv4" checked>
+          <span>IPv4 only</span></label>
+        <label class="opt"><input type="checkbox" id="cfg_ascii" checked>
+          <span>Fold typographic characters to ASCII in register exports</span></label>
+      </div>
+
+      <div class="cfg-sec">Subnet to enclave map</div>
+      <textarea class="cfgta" id="cfg_subnets" placeholder="10.20.10.0/24 = ALPHA&#10;10.20.30.0/24 = ALPHA-DMZ" style="min-height:64px"></textarea>
+      <div class="cfg-note">One per line: <code>CIDR = enclave name</code>.</div>
+
+      <div class="cfg-sec">Custom service names</div>
+      <textarea class="cfgta" id="cfg_services" placeholder="9997 = splunk-forwarder&#10;TCP/8443 = vendor-mgmt-gui"></textarea>
+      <div class="cfg-note">One per line: <code>port = name</code> or <code>PROTO/port = name</code>. Overrides the built-in port table.</div>
+
+      <div class="cfg-sec">Custom boundary tags</div>
+      <textarea class="cfgta" id="cfg_bounds" placeholder="Cross-domain solution&#10;Tactical uplink" style="min-height:64px"></textarea>
+
+      <div class="cfg-sec">Visible columns</div>
+      <div id="cfg_cols"></div>
+      <div class="cfg-note">Hidden columns are left out of CSV and Excel exports.</div>
+
+      <div class="toolbar" style="margin-top:18px;justify-content:flex-end">
+        <button class="btn ghost" id="cfgReset">Reset to defaults</button>
+        <button class="btn primary" id="cfgApply">Apply</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================= Guide ================= -->
+<main class="page" data-page="guide" hidden>
+  <section class="card">
+    <div class="card-h"><h2>Guide</h2></div>
+    <div class="card-b guide">
+      <p>A PPSM register lists every service an enclave uses: protocol, port, system, boundary crossed, the rule that permits it, and why it exists. This tool collects that from hosts, firewalls, switches, scanners and DNS, cross-references it, and writes the eMASS import template. Everything runs on this machine.</p>
+
+      <h3>Workflow</h3>
+      <ol>
+        <li><b>Setup.</b> Fill in the system header. Drop the collection folder on the ingest box.</li>
+        <li><b>Register.</b> Review the rows. Set <b>Boundary</b> on every row; it drives the diagram and the export. Use filters and bulk-apply for large sets.</li>
+        <li><b>Review.</b> Fill In derives what the data can prove. Run Checks lists what a reviewer would send back. Rule Coverage compares observed flows with the imported ruleset.</li>
+        <li><b>Endpoints.</b> Load a host inventory and name anything still unidentified. An address is not a system.</li>
+        <li><b>Export.</b> eMASS Import (allow.xlsx) for submission. Work is autosaved; Save Session keeps a copy you can move.</li>
+      </ol>
+
+      <h3>Collecting</h3>
+      <ul>
+        <li><code>collectors/ppsm-collect.ps1</code> on Windows, <code>collectors/ppsm-collect.sh</code> on Linux, or <code>collectors/ppsm.yml</code> with Ansible for a fleet. Each writes one results folder.</li>
+        <li>Firewall: <code>show conn all</code>, <code>show running-config access-list</code> and <code>object-group</code>, or FMC report exports.</li>
+        <li>Switches: <code>show flow monitor &lt;name&gt; cache format csv</code>, or a NetFlow analyser's top-conversations report.</li>
+        <li>ACAS: export the scan as <code>.nessus</code>.</li>
+      </ul>
+
+      <h3>What is read</h3>
+      <table class="fmt">
+        <tr><th>Hosts</th><td>netstat, ss, Get-NetTCPConnection, collector output, Windows Firewall log and rules</td></tr>
+        <tr><th>Firewall</th><td>show conn, access-list and object-group, FMC reports, FMC policy (PDF or CSV), ASA syslog, iptables, Palo Alto</td></tr>
+        <tr><th>Network</th><td>NetFlow cache, top conversations, Zeek conn.log, pcap and pcapng, tcpdump, pktmon</td></tr>
+        <tr><th>Scans</th><td>Nessus and ACAS, nmap XML</td></tr>
+        <tr><th>Names</th><td>DNS zones forward and reverse, Windows DNS exports, AD and CMDB exports, hosts files, DHCP leases, ARP</td></tr>
+        <tr><th>Containers</th><td>CSV, Excel, text-based PDF, plain text. Files are identified by content, not name.</td></tr>
+      </table>
+
+      <h3>Boundaries</h3>
+      <p>Traffic that stays inside the enclave is <b>Internal</b> and carries no B number. B13 and B14 are set where one end is outside your ranges. DISN crossings (B1 to B8, B15) are never set automatically because host and firewall data cannot prove them. Set those yourself.</p>
+
+      <h3>Where work is kept</h3>
+      <p>The session is written to the data folder shown when the app starts, after every change. Nothing is sent anywhere. New Session on the Export page discards it. The Self-Test button runs the engine's checks in this browser.</p>
+
+      <p class="hint">The full guide, including per-host commands and troubleshooting, is in <code>docs/user-guide.md</code>.</p>
+    </div>
+  </section>
+</main>
+
+<div class="foot">
+  Assembles a PPSM register on the DoDI 8551.01 data model. It does not certify compliance; inputs, boundaries and assurance remain the assessor's responsibility.
+</div>
+</div>
+
+<script src="/static/js/core.js"></script>
+<script src="/static/js/parsers.js"></script>
+<script src="/static/js/register.js"></script>
+<script src="/static/js/settings.js"></script>
+<script src="/static/js/flows.js"></script>
+<script src="/static/js/diagram.js"></script>
+<script src="/static/js/endpoints.js"></script>
+<script src="/static/js/emass.js"></script>
+<script src="/static/js/pdf.js"></script>
+<script src="/static/js/derive.js"></script>
+<script src="/static/js/rules.js"></script>
+<script src="/static/js/fmc.js"></script>
+<script src="/static/js/names.js"></script>
+<script src="/static/js/export.js"></script>
+<script src="/static/js/selftest.js"></script>
+<script src="/static/js/ui.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

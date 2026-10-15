@@ -137,7 +137,7 @@ Reached   : $REACHED host(s)
 $( [ -n "$FAILED" ] && echo "Unreachable: $FAILED" )
 
 WHAT TO DO WITH THIS FOLDER
-  1. Open ppsm-builder.html in a browser.
+  1. Start PPSM Builder (python3 ppsm.py).
   2. Set the subnet-to-enclave map under Settings.
   3. Select every file in hosts/ and inventory/ and drop them on the Ingest box.
   4. Press Finish Register.
